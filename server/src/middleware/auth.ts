@@ -21,16 +21,13 @@ export const authenticate = async (
     }
 
     const token = authHeader.split(' ')[1];
-    const jwtSecret = String(config.JWT_SECRET);
-
-    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+    const decoded = jwt.verify(token, config.JWT_SECRET) as JwtPayload;
 
     if (decoded.type !== 'access') {
       throw new AppError(401, 'Invalid token type', 'INVALID_TOKEN');
     }
 
     req.userId = decoded.userId;
-
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
@@ -56,8 +53,7 @@ export const optionalAuth = async (
     }
 
     const token = authHeader.split(' ')[1];
-    const jwtSecret = String(config.JWT_SECRET);
-    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+    const decoded = jwt.verify(token, config.JWT_SECRET) as JwtPayload;
 
     if (decoded.type === 'access') {
       req.userId = decoded.userId;
@@ -65,7 +61,6 @@ export const optionalAuth = async (
 
     next();
   } catch (error) {
-    // Ignore token errors for optional auth
     next();
   }
 };

@@ -6,27 +6,35 @@ import { UserModel } from '../models/User.model';
 import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
 import { config } from '../config/env';
+import { Document, Types } from 'mongoose';
 
 interface JwtPayload {
   userId: string;
   type: 'access' | 'refresh';
 }
 
+interface UserDocument extends Document {
+  _id: Types.ObjectId;
+  email: string;
+  password: string;
+  profile: {
+    name: string;
+    timezone: string;
+    preferences: any;
+  };
+}
+
 const generateTokens = (userId: string) => {
-  // Ensure the secrets are strings
-  const jwtSecret = String(config.JWT_SECRET);
-  const jwtRefreshSecret = String(config.JWT_REFRESH_SECRET);
-  
   const accessToken = jwt.sign(
     { userId, type: 'access' },
-    jwtSecret,
-    { expiresIn: config.JWT_EXPIRES_IN }
+    config.JWT_SECRET,
+    { expiresIn: '1h' }
   );
 
   const refreshToken = jwt.sign(
     { userId, type: 'refresh' },
-    jwtRefreshSecret,
-    { expiresIn: config.JWT_REFRESH_EXPIRES_IN }
+    config.JWT_REFRESH_SECRET,
+    { expiresIn: '7d' }
   );
 
   return { accessToken, refreshToken };
@@ -86,7 +94,7 @@ export const register = async (
           language: 'en',
         },
       },
-    });
+    }) as UserDocument;
 
     const tokens = generateTokens(user._id.toString());
 
@@ -118,7 +126,7 @@ export const login = async (
 
     const { email, password } = req.body;
 
-    const user = await UserModel.findOne({ email }).select('+password');
+    const user = await UserModel.findOne({ email }).select('+password') as UserDocument | null;
     if (!user) {
       throw new AppError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
     }
@@ -157,8 +165,7 @@ export const refreshToken = async (
       throw new AppError(401, 'Refresh token required', 'TOKEN_REQUIRED');
     }
 
-    const jwtRefreshSecret = String(config.JWT_REFRESH_SECRET);
-    const decoded = jwt.verify(refreshToken, jwtRefreshSecret) as JwtPayload;
+    const decoded = jwt.verify(refreshToken, config.JWT_REFRESH_SECRET) as JwtPayload;
     
     if (decoded.type !== 'refresh') {
       throw new AppError(401, 'Invalid token type', 'INVALID_TOKEN');
@@ -207,7 +214,7 @@ export const me = async (
       throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED');
     }
 
-    const user = await UserModel.findById(userId);
+    const user = await UserModel.findById(userId) as UserDocument | null;
     if (!user) {
       throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
     }

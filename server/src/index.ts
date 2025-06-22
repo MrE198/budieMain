@@ -1,10 +1,10 @@
+import { config } from './config/env';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { config } from './config/env';
 import { connectDB } from './config/database';
 import { connectRedis } from './config/redis';
 import { errorHandler } from './middleware/errorHandler';
