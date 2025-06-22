@@ -1,50 +1,33 @@
 import dotenv from 'dotenv';
-import path from 'path';
+import { z } from 'zod';
 
-// Load .env file from root directory
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+dotenv.config();
 
-interface Config {
-  NODE_ENV: string;
-  PORT: number;
-  CLIENT_URL: string;
-  MONGODB_URI: string;
-  REDIS_URL: string;
-  JWT_SECRET: string;
-  JWT_REFRESH_SECRET: string;
-  JWT_EXPIRES_IN: string;
-  JWT_REFRESH_EXPIRES_IN: string;
-  ENCRYPTION_KEY: string;
-  RATE_LIMIT_WINDOW_MS: number;
-  RATE_LIMIT_MAX_REQUESTS: number;
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  PORT: z.string().default('3001'),
+  CLIENT_URL: z.string().default('http://localhost:5173'),
+  MONGODB_URI: z.string().default('mongodb://localhost:27017/budie'),
+  REDIS_URL: z.string().default('redis://localhost:6379'),
+  JWT_SECRET: z.string(),
+  JWT_REFRESH_SECRET: z.string(),
+  JWT_EXPIRES_IN: z.string().default('15m'),
+  JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  ENCRYPTION_KEY: z.string().optional(),
+  RATE_LIMIT_WINDOW_MS: z.string().default('900000'),
+  RATE_LIMIT_MAX_REQUESTS: z.string().default('100'),
+});
+
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+  console.error('❌ Invalid environment variables:', parsed.error.format());
+  process.exit(1);
 }
 
-const requiredEnvVars = [
-  'JWT_SECRET',
-  'JWT_REFRESH_SECRET',
-  'MONGODB_URI',
-  'REDIS_URL',
-  'ENCRYPTION_KEY',
-];
-
-// Check required environment variables
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    throw new Error(`Missing required environment variable: ${envVar}`);
-  }
-}
-
-export const config: Config = {
-  NODE_ENV: process.env.NODE_ENV || 'development',
-  PORT: parseInt(process.env.PORT || '3001', 10),
-  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
-  MONGODB_URI: process.env.MONGODB_URI as string,
-  REDIS_URL: process.env.REDIS_URL as string,
-  JWT_SECRET: process.env.JWT_SECRET as string,
-  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET as string,
-  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '15m',
-  JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY as string,
-  RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
-  RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+export const config = {
+  ...parsed.data,
+  PORT: parseInt(parsed.data.PORT, 10),
+  RATE_LIMIT_WINDOW_MS: parseInt(parsed.data.RATE_LIMIT_WINDOW_MS, 10),
+  RATE_LIMIT_MAX_REQUESTS: parseInt(parsed.data.RATE_LIMIT_MAX_REQUESTS, 10),
 };

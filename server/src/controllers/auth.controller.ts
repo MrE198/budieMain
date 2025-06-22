@@ -7,16 +7,25 @@ import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
 import { config } from '../config/env';
 
+interface JwtPayload {
+  userId: string;
+  type: 'access' | 'refresh';
+}
+
 const generateTokens = (userId: string) => {
+  // Ensure the secrets are strings
+  const jwtSecret = String(config.JWT_SECRET);
+  const jwtRefreshSecret = String(config.JWT_REFRESH_SECRET);
+  
   const accessToken = jwt.sign(
     { userId, type: 'access' },
-    config.JWT_SECRET,
+    jwtSecret,
     { expiresIn: config.JWT_EXPIRES_IN }
   );
 
   const refreshToken = jwt.sign(
     { userId, type: 'refresh' },
-    config.JWT_REFRESH_SECRET,
+    jwtRefreshSecret,
     { expiresIn: config.JWT_REFRESH_EXPIRES_IN }
   );
 
@@ -36,22 +45,19 @@ export const register = async (
 
     const { email, password, name, timezone } = req.body;
 
-    // Check if user already exists
     const existingUser = await UserModel.findOne({ email });
     if (existingUser) {
       throw new AppError(409, 'User already exists', 'USER_EXISTS');
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user
     const user = await UserModel.create({
       email,
       password: hashedPassword,
       profile: {
         name,
-        timezone,
+        timezone: timezone || 'UTC',
         preferences: {
           notifications: {
             email: true,
@@ -82,42 +88,53 @@ export const register = async (
       },
     });
 
-    // Generate tokens
-const generateTokens = (userId: string) => {
-  const accessToken = jwt.sign(
-    { userId, type: 'access' },
-    config.JWT_SECRET,
-    { expiresIn: config.JWT_EXPIRES_IN as string | number }
-  );
+    const tokens = generateTokens(user._id.toString());
 
-  const refreshToken = jwt.sign(
-    { userId, type: 'refresh' },
-    config.JWT_REFRESH_SECRET,
-    { expiresIn: config.JWT_REFRESH_EXPIRES_IN as string | number }
-  );
+    logger.info(`New user registered: ${email}`);
 
-  return { accessToken, refreshToken };
+    res.status(201).json({
+      user: {
+        id: user._id.toString(),
+        email: user.email,
+        profile: user.profile,
+      },
+      ...tokens,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
-    // Find user
+
+export const login = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new AppError(400, 'Validation failed', 'VALIDATION_ERROR', { errors: errors.array() });
+    }
+
+    const { email, password } = req.body;
+
     const user = await UserModel.findOne({ email }).select('+password');
     if (!user) {
       throw new AppError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
     }
 
-    // Check password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       throw new AppError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
     }
 
-    // Generate tokens
-    const tokens = generateTokens(user.id);
+    const tokens = generateTokens(user._id.toString());
 
     logger.info(`User logged in: ${email}`);
 
     res.json({
       user: {
-        id: user.id,
+        id: user._id.toString(),
         email: user.email,
         profile: user.profile,
       },
@@ -140,14 +157,13 @@ export const refreshToken = async (
       throw new AppError(401, 'Refresh token required', 'TOKEN_REQUIRED');
     }
 
-    // Verify refresh token
-    const decoded = jwt.verify(refreshToken, config.JWT_REFRESH_SECRET) as any;
+    const jwtRefreshSecret = String(config.JWT_REFRESH_SECRET);
+    const decoded = jwt.verify(refreshToken, jwtRefreshSecret) as JwtPayload;
     
     if (decoded.type !== 'refresh') {
       throw new AppError(401, 'Invalid token type', 'INVALID_TOKEN');
     }
 
-    // Generate new tokens
     const tokens = generateTokens(decoded.userId);
 
     res.json(tokens);
@@ -168,12 +184,7 @@ export const logout = async (
   next: NextFunction
 ) => {
   try {
-    // In a real application, you might want to:
-    // 1. Add the token to a blacklist
-    // 2. Clear any server-side sessions
-    // 3. Log the logout event
-
-    const userId = (req as any).userId;
+    const userId = req.userId;
     logger.info(`User logged out: ${userId}`);
 
     res.json({
@@ -190,7 +201,11 @@ export const me = async (
   next: NextFunction
 ) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.userId;
+
+    if (!userId) {
+      throw new AppError(401, 'Unauthorized', 'UNAUTHORIZED');
+    }
 
     const user = await UserModel.findById(userId);
     if (!user) {
@@ -199,7 +214,7 @@ export const me = async (
 
     res.json({
       user: {
-        id: user.id,
+        id: user._id.toString(),
         email: user.email,
         profile: user.profile,
       },

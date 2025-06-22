@@ -1,31 +1,36 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { AppError } from '../utils/AppError';
 import { config } from '../config/env';
+import { AppError } from '../utils/AppError';
 
-export interface AuthRequest extends Request {
-  userId?: string;
+interface JwtPayload {
+  userId: string;
+  type: string;
 }
 
 export const authenticate = async (
-  req: AuthRequest,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
+    const authHeader = req.headers.authorization;
 
-    if (!token) {
-      throw new AppError(401, 'Authentication required', 'NO_TOKEN');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new AppError(401, 'No token provided', 'NO_TOKEN');
     }
 
-    const decoded = jwt.verify(token, config.JWT_SECRET) as any;
-    
+    const token = authHeader.split(' ')[1];
+    const jwtSecret = String(config.JWT_SECRET);
+
+    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+
     if (decoded.type !== 'access') {
       throw new AppError(401, 'Invalid token type', 'INVALID_TOKEN');
     }
 
     req.userId = decoded.userId;
+
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
@@ -35,5 +40,32 @@ export const authenticate = async (
     } else {
       next(error);
     }
+  }
+};
+
+export const optionalAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next();
+    }
+
+    const token = authHeader.split(' ')[1];
+    const jwtSecret = String(config.JWT_SECRET);
+    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+
+    if (decoded.type === 'access') {
+      req.userId = decoded.userId;
+    }
+
+    next();
+  } catch (error) {
+    // Ignore token errors for optional auth
+    next();
   }
 };

@@ -9,13 +9,16 @@ services:
       - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_ROOT_PASSWORD: password
       MONGO_INITDB_DATABASE: budie
     volumes:
       - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - budie-network
 
   redis:
-    image: redis:7.2-alpine
+    image: redis:7-alpine
     container_name: budie-redis
     restart: unless-stopped
     ports:
@@ -23,7 +26,13 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    networks:
+      - budie-network
 
 volumes:
   mongodb_data:
   redis_data:
+
+networks:
+  budie-network:
+    driver: bridge

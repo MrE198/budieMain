@@ -1,21 +1,9 @@
-// Extend Express Request type to include our custom properties
-declare namespace Express {
-  export interface Request {
-    userId?: string;
-    user?: {
-      id: string;
-      email: string;
-      role?: string;
-    };
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+    }
   }
 }
 
-// Extend Express Response locals for passing data between middleware
-declare namespace Express {
-  export interface Response {
-    locals: {
-      startTime?: number;
-      requestId?: string;
-    };
-  }
-}
+export {};
